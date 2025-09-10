@@ -2,9 +2,25 @@ import express from "express";
 import multer from "multer";
 import cloudinary from "../utils/cloudinary.js";
 import Order from "../models/Order.js";
+import { Readable } from "stream";  // ✅ replace require("stream")
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// helper: upload buffer to Cloudinary
+const uploadToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { resource_type: "auto" },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+
+    Readable.from(fileBuffer).pipe(stream);
+  });
+};
 
 // CREATE ORDER with file upload
 router.post("/", upload.single("file"), async (req, res) => {
@@ -12,17 +28,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     let fileData = null;
 
     if (req.file) {
-      const result = await cloudinary.uploader.upload_stream(
-        { resource_type: "auto" },
-        (error, result) => {
-          if (error) return res.status(500).json(error);
-          fileData = result;
-        }
-      );
-
-      // pipe file buffer to Cloudinary upload
-      req.file.stream = req.file.stream || require("stream").Readable.from(req.file.buffer);
-      req.file.stream.pipe(result);
+      fileData = await uploadToCloudinary(req.file.buffer);
     }
 
     const order = new Order({
@@ -44,22 +50,15 @@ router.put("/:id", upload.single("file"), async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // delete old file if new uploaded
-    if (req.file && order.publicId) {
-      await cloudinary.uploader.destroy(order.publicId);
-    }
-
     let fileData = {};
+
     if (req.file) {
-      const result = await cloudinary.uploader.upload_stream(
-        { resource_type: "auto" },
-        (error, result) => {
-          if (error) return res.status(500).json(error);
-          fileData = result;
-        }
-      );
-      req.file.stream = req.file.stream || require("stream").Readable.from(req.file.buffer);
-      req.file.stream.pipe(result);
+      // delete old file
+      if (order.publicId) {
+        await cloudinary.uploader.destroy(order.publicId);
+      }
+      // upload new file
+      fileData = await uploadToCloudinary(req.file.buffer);
     }
 
     order.set({
@@ -85,7 +84,7 @@ router.delete("/:id", async (req, res) => {
       await cloudinary.uploader.destroy(order.publicId);
     }
 
-    await order.remove();
+    await order.deleteOne();
     res.json({ message: "Order deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
