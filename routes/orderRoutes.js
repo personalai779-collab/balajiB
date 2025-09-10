@@ -2,21 +2,29 @@ import express from "express";
 import multer from "multer";
 import cloudinary from "../utils/cloudinary.js";
 import Order from "../models/Order.js";
-import { Readable } from "stream";  // ✅ replace require("stream")
+import { Readable } from "stream";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// helper: upload buffer to Cloudinary
-const uploadToCloudinary = (fileBuffer) => {
+// Helper: Upload buffer to Cloudinary with image optimization
+const uploadToCloudinary = (fileBuffer, isImage = true) => {
   return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { resource_type: "auto" },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      }
-    );
+    const options = {
+      resource_type: "auto",
+    };
+
+    // Apply optimization for images only
+    if (isImage) {
+      options.quality = "auto"; // Automatically adjust quality to reduce size
+      options.fetch_format = "auto"; // Automatically choose optimal format (e.g., WebP)
+      options.flags = "lossy"; // Enable lossy compression for further size reduction
+    }
+
+    const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) return reject(error);
+      resolve(result);
+    });
 
     Readable.from(fileBuffer).pipe(stream);
   });
@@ -28,13 +36,15 @@ router.post("/", upload.single("file"), async (req, res) => {
     let fileData = null;
 
     if (req.file) {
-      fileData = await uploadToCloudinary(req.file.buffer);
+      // Check if the file is an image based on mimetype
+      const isImage = req.file.mimetype.startsWith("image/");
+      fileData = await uploadToCloudinary(req.file.buffer, isImage);
     }
 
     const order = new Order({
       ...req.body,
       url: fileData?.secure_url || null,
-      publicId: fileData?.public_id || null
+      publicId: fileData?.public_id || null,
     });
 
     await order.save();
@@ -53,18 +63,19 @@ router.put("/:id", upload.single("file"), async (req, res) => {
     let fileData = {};
 
     if (req.file) {
-      // delete old file
+      // Delete old file
       if (order.publicId) {
         await cloudinary.uploader.destroy(order.publicId);
       }
-      // upload new file
-      fileData = await uploadToCloudinary(req.file.buffer);
+      // Upload new file with optimization
+      const isImage = req.file.mimetype.startsWith("image/");
+      fileData = await uploadToCloudinary(req.file.buffer, isImage);
     }
 
     order.set({
       ...req.body,
       url: fileData.secure_url || order.url,
-      publicId: fileData.public_id || order.publicId
+      publicId: fileData.public_id || order.publicId,
     });
 
     await order.save();
