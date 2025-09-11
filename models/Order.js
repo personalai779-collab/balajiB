@@ -9,8 +9,15 @@ const orderSchema = new mongoose.Schema({
   deliveryDate: Date,
   type: String,
   paymentStatus: String,
-  url: String,       // file URL from Cloudinary
-  publicId: String   // Cloudinary public_id (needed for delete/update)
-});
+  totalAmount: Number,        // ✅ new
+  receivedPayment: Number,    // ✅ new
+  url: String,
+  publicId: String,
+  clientId: {                 // ✅ link to client
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Client",
+    required: true
+  }
+}, { timestamps: true });
 
 export default mongoose.model("Order", orderSchema);
