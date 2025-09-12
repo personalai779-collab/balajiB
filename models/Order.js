@@ -13,10 +13,10 @@ const orderSchema = new mongoose.Schema({
   receivedPayment: Number,    // ✅ new
   url: String,
   publicId: String,
-  name: { type: String, required: true },
-  mobileNumber: { type: String, required: true },
-  address: String,
-  city: String,
+  clientName: { type: String, required: true },
+  clientMobileNumber: { type: String, required: true },
+  clientAddress: String,
+  clientCity: String,
   clientId: {                 // ✅ link to client
     type: mongoose.Schema.Types.ObjectId,
     ref: "Client",
