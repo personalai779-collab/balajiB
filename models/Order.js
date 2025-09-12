@@ -16,7 +16,7 @@ const orderSchema = new mongoose.Schema({
   name: { type: String, required: true },
   mobileNumber: { type: String, required: true },
   address: String,
-  city: String
+  city: String,
   clientId: {                 // ✅ link to client
     type: mongoose.Schema.Types.ObjectId,
     ref: "Client",
